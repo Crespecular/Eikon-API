@@ -1,0 +1,433 @@
+#Initial setup
+
+import numpy as np
+import pandas as pd
+pd.core.common.is_list_like = pd.api.types.is_list_like
+import scipy as sp
+import os
+os.chdir('C:\\Users\\cresp\\Documents\\Finance_Eng')
+import matplotlib.pyplot as plt 
+import time as tt
+import eikon as ek
+ek.set_app_id('')
+from scipy import stats
+import statsmodels.api as sm
+import datetime
+import pandas_datareader.data as web
+#####################################################################
+
+#####################################################################
+#Let's get data from FRED
+#pip install fredapi
+from fredapi import Fred
+#####################################################################
+
+#####################################################################
+#Example Code
+tickers = ['WMT','IBM','C','AAPL.O','MSFT.O','.SPX']
+sDate = '2010-01-01'
+eDate = '2018-04-30'
+
+
+#####################################################################
+# Finance Calculator
+def fv_f(pv,r,n):
+    """Objective : Calculating Futre Value"""
+    return pv*(1+r)**n
+    
+def pv_f(fv,r,n):
+    """Objective : Calculating Present Value"""
+    return fv/(1+r)**n
+    
+def npv_f(rate, cashflows):
+    """Objective : Calculating Net Present Value"""
+    total = 0.0
+    for i, cashflow in enumerate(cashflows):
+        total += cashflow/(1+rate)**i
+    return total
+    
+def npv_r_f(cashflows):
+    """Objective : Calculating NPV == 0 rate"""
+    r=0.0
+    while(r<1.0):
+        r += 0.000001
+        npv = npv_f(r,cashflows)
+        if(abs(npv)<=0.0001):
+            print(r)
+            
+def sharpe(returns, riskfree, volatility):
+    """Objective : Calculating Sharpe ratio of the portfolio"""
+    ratio = (returns-riskfree)/volatility
+    return ratio
+
+def bsCall(S,X,T,r,sigma):
+    """Objective : Black-Schloes-Merton Model for Call-Option Price"""
+    d1 = (sp.log(S/X)+(r+sigma*sigma/2.)*T)/(sigma*sqrt(T))
+    d2 = d1-sigma*sqrt(T)
+    return S*sp.stats.norm.cdf(d1)-X*sp.exp(-r*T)*sp.stats.norm.cdf(d2)
+    
+def geom_mean_ret(ret):
+    """Objective : Calculating geometric mean of the returns"""
+    if(type(ret) == type(np.array([0]))):
+        print(ret)
+    else:
+        ret=np.array(ret)
+        print(ret)
+    return pow(sp.prod(ret+1),1./len(ret))-1
+
+#####################################################################
+
+#####################################################################
+#Retrieve the data from Eikon API & rearrange
+def D_data(ticker, sDate,eDate):
+    """Objective : Retrieving adjusted price data from Eikon"""
+    data, error=ek.get_data(ticker, ['TR.PriceClose.Date', 'TR.PriceClose'], parameters={'SDate':sDate, 'EDate':eDate})
+    table = pd.pivot_table(data, index='Date', columns='Instrument',values='Price Close')
+    table = table.fillna(method = 'ffill')
+    table.index = pd.to_datetime(table.index)
+    table.to_csv('C:\\Users\\cresp\\Documents\\Finance_Eng\\{}.csv'.format(eDate+'_data'))
+    return(table)
+    
+def DP_data(data,index,sDate,eDate):
+    Data = data.copy()
+    Index = index.copy()
+    all_weekdays = pd.date_range(start=sDate, end=eDate, freq='B')
+    Data.drop(['HIGH','LOW','OPEN','COUNT','VOLUME'], level=1, axis=1, inplace=True)
+    Data.columns = Data.columns.droplevel(1)
+    Data = Data.reindex(all_weekdays)
+    Index.drop(['HIGH','LOW','OPEN','VOLUME'],axis=1,inplace=True)
+    Data[m_index] = Index
+    Data = Data.fillna(method = 'ffill')
+    Data.to_csv('C:\\Users\\cresp\\Documents\\Finance_Eng\\{}.csv'.format(eDate+'_table'))
+    return(Data)
+#####################################################################
+
+#####################################################################
+eq_data = D_data(tickers[:-1], sDate, eDate)
+data, err = ek.get_data(tickers[:-1], ['TR.PriceClose.Date', 'TR.PriceClose'], parameters={'SDate':sDate, 'EDate':eDate})
+eq_data.resample('BM').apply(lambda x: x[-1])
+
+#####################################################################
+#Change the daily data into monthly data
+
+M_data = p_data.resample('BM').apply(lambda x: x[-1])
+M_data = M_data.dropna()
+Y_data = p_data.resample('Y').apply(lambda x : x[-1])
+Y_data = Y_data.dropna()
+# data.resample('BM', convention='end').asfreq()
+
+#Returns
+
+ret = p_data/p_data.shift(1)-1
+mean = np.mean(p_data.pct_change())
+log_ret = np.log(p_data/p_data.shift(1))
+log_mean = log_ret.mean()
+ret = p_data/p_data.shift(1)-1
+mean = np.mean(p_data.pct_change())
+log_ret = np.log(p_data/p_data.shift(1))
+log_mean = log_ret.mean()
+
+#####################################################################
+### Retrieving other data from Eikon
+
+#####################################################################
+#FRED DATA
+def F_data(tickers,field,parameters):
+    """Ex: df, err = ek.get_data(['GOOG.O', 'MSFT.O', 'FB.O', 'AMZN.O', 'TWTR.K'], 
+                      ['TR.Revenue.date','TR.Revenue','TR.GrossProfit'],
+                      {'Scale': 6, 'SDate': 0, 'EDate': -5, 'FRQ': 'FY', 'Curn': 'USD'})"""
+    Fdata, err = ek.get_data(tickers,field,options)
+    return(Fdata)
+    
+fred = Fred(api_key='d39873dbe8ffa95984f7402f68688727')
+#http://mortada.net/python-api-for-fred.html
+#10-Year Treasury Constant Maturity Minus 2-Year Treasury Constant Maturity(T10Y2Y)
+#Consumer Price Index for All Urban Consumers: All Items (CPIAUCSL)
+#Effective Federal Funds Rate (FEDFUNDS)
+#10-Year Treasury Constant Maturity Rate (DGS10)
+#Civilian Unemployment Rate (UNRATE)
+#3-Month London Interbank Offered Rate (LIBOR), based on U.S. Dollar (USD3MTD156N)
+#1-Month London Interbank Offered Rate (LIBOR), based on U.S. Dollar (USD1MTD156N)
+# ICE BofAML US High Yield Master II Option-Adjusted Spread (BAMLH0A0HYM2)
+#example : data = fred.get_series_all_releases('T10Y2Y')
+
+
+begdate = datetime.datetime(1900,1,1)
+enddate = datetime.datetime(2017,1,27)
+x = web.DataReader('GDP',"fred",begdate,enddate)
+#This also results the same data,from the pandas
+
+Fed_rate = fred.get_series_all_releases('FEDFUNDS')
+GDP = fred.get_series('GDP')
+#####################################################################
+
+#####################################################################
+# Testing
+
+#### #Testing if our mean return of each stock is the same (Null : ri = rj)
+
+for i in range(len(tickers)):
+    print("H0:", tickers[i-1], "=", tickers[i], '\n', stats.ttest_ind(p_data[tickers[i-1]],p_data[tickers[i]]))
+
+#### Testing if distributions of two stocks are the same#### 
+
+for i in range(len(tickers)):
+    print("H0: Distribution of", tickers[i-1], "=", tickers[i], '\n', stats.bartlett(p_data[tickers[i-1]],p_data[tickers[i]]))
+
+#####################################################################
+# Distribution Plotting
+
+### Testing if stock returns are normally distributed (But most unlikely)
+
+mu = np.mean(p_data.pct_change())
+sigma = np.std(p_data.pct_change())
+
+
+
+def return_dist(ticker):
+    """Objective : Let's get some distributions"""
+    Plot_data = p_data.pct_change().dropna()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    [n,bins,patches] = hist(Plot_data[ticker],100)
+    ax.hist(Plot_data[ticker],100)
+    x= mlab.normpdf(bins, mu[ticker], sigma[ticker])
+    ax.plot(bins, x, color='red', lw=2)
+
+#ex: return_dist('NFLX.O')
+
+return_dist('WMT')
+
+#####################################################################
+#  CAPM
+
+### Linear Regression...
+
+#To calculate Beta, we need to use...
+def ols_reg(x,y): 
+    """Objective : Let's do some econometrics here"""
+    """Ex: ols_reg('NFLX.O','.SPX') """
+    X = w_data[x]
+    Y = w_data[y]
+    X1 = sm.add_constant(X)
+    reg = sm.OLS(Y, X1).fit()
+    slope, intercept, r_value, p_value, std_err = stats.linregress(X,Y)
+    print(reg.summary())
+    line = intercept + slope*X
+    scatter(X,Y)
+    plot(X,line)
+    show()
+
+ols_reg('WMT','.SPX')
+
+# Fama-French Factor Model data
+
+#Fama-French factor Model
+#for more information...
+#from pandas_datareader.famafrench import get_available_datasets
+#get_available_datasets()
+ff = web.DataReader("F-F_Research_Data_Factors_daily", "famafrench")
+ff[0].head()
+
+ff = web.DataReader('F-F_Research_Data_5_Factors_2x3_daily', 'famafrench')
+
+IBM = (p_data[['IBM']]/p_data[['IBM']].shift(1))-1
+
+fama = pd.merge(ff[0],IBM,left_index=True,right_index=True,how='left')
+fama = fama.dropna()
+fama.head()
+
+x = fama[['Mkt-RF','SMB','HML','RMW','CMA','RF']]
+y = fama[['IBM']]
+x = sm.add_constant(x)
+results=sm.OLS(y,x).fit()
+print(results.summary())
+
+   date = ff[0].index
+    Y = pd.DataFrame(w_data[[y]],date).dropna()
+    X = fama[0]
+
+ff[0].head()
+
+np.log((p_data['IBM']/p_data['IBM'].shift(1)))
+
+def fama_reg(y): 
+    """Objective : Let's do some econometrics here"""
+    """Ex: ols_reg('NFLX.O','fama') """
+    date = ff[0].index
+    Y = pd.DataFrame(w_data[[y]],date).dropna()
+    X = ff[0]
+    sam = pd.merge(Y,X,left_index=True,right_index=True,how='left')
+    Y = sam[[y]]
+    X = sam[['Mkt-RF','SMB','HML','RMW','CMA','RF']]
+    X1 = sm.add_constant(X)
+    reg = sm.OLS(Y, X1).fit()
+    print(reg.summary())
+    line = intercept + slope*X
+    scatter(X,Y)
+    plot(X,line)
+    show()
+
+reg = sm.OLS(Y, X).fit()
+
+reg.summary()
+
+date = ff[0].index
+Y= pd.DataFrame(w_data[['AAPL.O']],date).dropna()
+X = ff[0]
+X1 = sm.add_constant(X)
+
+#Since GDP is not daily data, we are missing a lot of values. We are going to replace those values by interpolation
+ttt = final['GDP']
+GDP_i = pd.Series(ttt).interpolate()
+final['GDP_i'] = GDP_i
+
+#####################################################################
+# Portfolio Theory
+
+### Utility Function
+
+def UtilityFunction(ret, A=1):
+    meanDaily=sp.mean(ret)
+    varDaily=sp.var(ret)
+    meanAnnual=(1+meanDaily)**252
+    varAnnual=varDaily*252
+    return meanAnnual-0.5*A*varAnnual
+def meanVarAnnual(ret):
+    meanDaily=sp.mean(ret)
+    varDaily=sp.var(ret)
+    meanAnnual=(1+meanDaily)**252
+    varAnnual=varDaily*252
+    return 'Annual Mean', meanAnnual, 'Annual Var', varAnnual
+
+meanVarAnnual(ret)
+
+for i in tickers:
+    ret1 = ret[i]
+    print(i, UtilityFunction(ret1,10))
+# This is the case where risk preference A =1
+
+def cor_heatmap(data):
+    df_corr = data.corr()
+    corr_data = df_corr.values
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+
+    heatmap = ax.pcolor(corr_data, cmap=plt.cm.RdYlGn)
+    fig.colorbar(heatmap)
+    ax.set_xticks(np.arange(corr_data.shape[0]) +0.5, minor=False)
+    ax.set_yticks(np.arange(corr_data.shape[1]) +0.5, minor=False)
+    ax.invert_yaxis()
+    ax.xaxis.tick_top()
+
+    column_labels = df_corr.columns
+    row_labels = df_corr.index
+
+    ax.set_xticklabels(column_labels)
+    ax.set_yticklabels(row_labels)
+    plt.xticks(rotation=90)
+    heatmap.set_clim(-1,1)
+    plt.tight_layout()
+    plt.show()
+
+def MPT(portfolio):
+    port_returns = []
+    port_volatility = []
+    stock_weights = []
+
+    #port_log_returns = []
+    #port_log_volatility = []
+
+    sharpe_ratio = []
+    #log_sharpe_ratio = []
+
+    # set the number of combinations for imaginary portfolios
+    num_assets = len(tickers)
+    num_portfolios = 50000
+
+    port_data = portfolio
+    returns_daily = port_data.pct_change()
+    returns_annual = returns_daily.mean() * 252
+
+    #log_returns_daily = np.log(table/table.shift(1))
+    #log_returns_annual = log_returns_daily.mean() * 252
+
+    cov_daily = returns_daily.cov()
+    cov_annual = cov_daily * 252
+
+    #cov_log_daily = log_returns_daily.cov()
+    #cov_log_annual = cov_log_daily*252
+
+    # populate the empty lists with each portfolios returns,risk and weights
+    for single_portfolio in range(num_portfolios):
+        weights = np.random.random(num_assets)
+        weights /= np.sum(weights)
+
+        returns = np.dot(weights, returns_annual)
+        #log_returns = np.dot(weights, log_returns_annual) 
+
+        volatility = np.sqrt(np.dot(weights.T, np.dot(cov_annual, weights)))
+        #log_volatility = np.sqrt(np.dot(weights.T, np.dot(cov_log_annual, weights)))
+
+        sharpe = (returns-0.0278) / volatility
+        sharpe_ratio.append(sharpe)
+
+        #log_sharpe = log_returns / log_volatility
+        #log_sharpe_ratio.append(log_sharpe)
+
+        port_returns.append(returns)
+        #port_log_returns.append(log_returns)
+
+        port_volatility.append(volatility)
+        #port_log_volatility.append(log_volatility)
+
+        stock_weights.append(weights)
+
+    # a dictionary for Returns and Risk values of each portfolio
+    portfolio = {'Returns': port_returns,
+                 'Volatility': port_volatility, 
+                 'Sharpe Ratio': sharpe_ratio}
+    #log_portfolio = {'Log Returns': port_log_returns,'Log Volatility': port_log_volatility,'Log Sharpe Ratio': log_sharpe_ratio}
+
+    # extend original dictionary to accomodate each ticker and weight in the portfolio
+    for counter,symbol in enumerate(tickers):
+        portfolio[symbol+' weight'] = [weight[counter] for weight in stock_weights]
+        #log_portfolio[symbol +' weight'] = [weight[counter] for weight in stock_weights]
+
+    # make a nice dataframe of the extended dictionary
+    df = pd.DataFrame(portfolio)
+    #df_log = pd.DataFrame(log_portfolio)
+
+    # get better labels for desired arrangement of columns
+    column_order = ['Returns', 'Volatility', 'Sharpe Ratio'] + [stock+' weight' for stock in tickers]
+    #ln_column_order = ['Log Returns', 'Log Volatility', 'Log Sharpe Ratio'] + [stock+' weight' for stock in tickers]
+
+    # reorder dataframe columns
+    df = df[column_order]
+    
+    min_volatility = df['Volatility'].min()
+    max_sharpe = df['Sharpe Ratio'].max()
+
+    # use the min, max values to locate and create the two special portfolios
+    sharpe_portfolio = df.loc[df['Sharpe Ratio'] == max_sharpe]
+    min_variance_port = df.loc[df['Volatility'] == min_volatility]
+
+    # plot frontier, max sharpe & min Volatility values with a scatterplot
+    plt.style.use('seaborn-dark')
+    df.plot.scatter(x='Volatility', y='Returns', c='Sharpe Ratio',
+                    cmap='RdYlGn', edgecolors='black', figsize=(10, 8), grid=True)
+    plt.scatter(x=sharpe_portfolio['Volatility'], y=sharpe_portfolio['Returns'], c='red', marker='D', s=200)
+    plt.scatter(x=min_variance_port['Volatility'], y=min_variance_port['Returns'], c='blue', marker='D', s=200)
+    plt.xlabel('Volatility (Std. Deviation)')
+    plt.ylabel('Expected Returns')
+    plt.title('Efficient Frontier')
+    plt.show()
+    print('Minimum Variance')
+    print(min_variance_port)
+    print('Maximum Sharpe')
+    print(sharpe_portfolio)
+
+MPT(p_data)
+
+
+
