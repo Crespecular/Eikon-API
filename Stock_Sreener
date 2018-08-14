@@ -1,0 +1,105 @@
+import numpy as np
+import pandas as pd
+pd.core.common.is_list_like = pd.api.types.is_list_like
+import scipy as sp
+import os
+import matplotlib.pyplot as plt 
+import time as tt
+from scipy import stats
+import statsmodels.api as sm
+import datetime
+import pandas_datareader.data as web
+import urllib
+
+import eikon as ek
+ek.set_app_id('')
+os.chdir('C:\\Users\\cresp\\Documents\\Finance_Eng')
+
+os.chdir("C:\\Users\\Admin\\Documents\\NEOBIZBOX 받은 파일")
+#####################################################################
+
+#####################################################################
+#######Retrieving S&P 500 ticker list
+raw_table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
+tickers_table = raw_table[0]
+sliced_table = tickers_table[1:]
+header = tickers_table.iloc[0]
+SNP_table = sliced_table.rename(columns=header)
+SNP_table.head()
+
+Kospi_table = pd.read_html('http://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13', header=0)[0]
+Kospi_table.종목코드 = Kospi_table.종목코드.map('{:06d}'.format)
+Kospi_table = Kospi_table[['회사명', '종목코드']]
+Kospi_table = Kospi_table.rename(columns={'회사명': 'name', '종목코드': 'code'}) 
+Kospi_table.head()
+
+### Retrieveing EFT holdings
+def ETF(ticker,number):
+    table, err = ek.get_data([ticker],['TR.FundHoldingRIC(StartNum=1,EndNum={})'.format(number), 'TR.FundHoldingName(StartNum=1,EndNum={})'.format(number),'TR.FundPercentageOfFundAssets'],{'StartNum':'1','EndNum':'{}'.format(number)})
+    return table
+
+ETF('IGV',10)
+
+### Getting Tickers (non-Eikon)
+def Eikon_ticker(ETF_name,n=100):
+    A = ETF(ETF_name,n)
+    A_RIC = A['Holding RIC']
+    A_RIC = [i.split('.')[0] for i in A_RIC]
+    return A_RIC
+
+IGV_RIC = Eikon_ticker('IGV')
+
+def get_statistics(Eik_ticker):
+    try:
+        URL = 'https://finance.yahoo.com/quote/{code}/key-statistics?p={code}'.format(code=Eik_ticker)
+        html = pd.read_html(URL)[0]
+        PBR = html.loc[6][1]
+        EV = html.loc[1][1]
+        CAP = html.loc[0][1]
+        PER = html.loc[2][1]
+        PEG = html.loc[4][1]
+        print(Eik_ticker)
+        print('PBR : ',PBR)
+        print('PER : ',PER)
+        print('PEG : ',PEG)
+        print('***************')
+        time.sleep(1)
+        
+    except:
+        print('Failed',Eik_ticker)
+
+def PBR_screen(Eik_ticker,criteria):
+    try:
+        URL = 'https://finance.yahoo.com/quote/{code}/key-statistics?p={code}'.format(code=Eik_ticker)
+        html = pd.read_html(URL)[0]
+        PBR = html.loc[6][1]
+        
+        if float(PBR) < float(criteria):            
+            print(Eik_ticker)
+            print('PBR : ',PBR)
+            print('***************')
+            time.sleep(1)
+        else: 
+            print(Eik_ticker)
+            print('Current PBR is {}'.format(PBR))
+        
+    except:
+        print('Failed',Eik_ticker)
+        
+#####################################################################
+## To get the prices from Naver (This may apply to Koreans only :/ )
+***********************************************STILL ON PROGRESS
+import urllib.request as req
+from bs4 import BeautifulSoup
+
+url ="http://info.finance.naver.com/marketindex/"
+
+response = req.urlopen(url)
+soup = BeautifulSoup(response, 'html.parser')
+price = soup.select_one("li.on > a.head.wti > div > span.value").string
+print("WTI=" ,price)
+
+url ="https://finance.naver.com/item/main.nhn?code=003690"
+
+soup = BeautifulSoup(response, 'html.parser')
+price = soup.find("div.section.trade_compare > table > tbody",{})
