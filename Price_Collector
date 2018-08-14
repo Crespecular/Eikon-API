@@ -1,0 +1,27 @@
+import pandas as pd
+import os
+
+os.getcwd()
+os.chdir("C:\\Users\\Admin\\Documents\\NEOBIZBOX 받은 파일\\새 폴더")
+
+code_df = pd.read_html('http://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13', header=0)[0]
+code_df.종목코드 = code_df.종목코드.map('{:06d}'.format)
+code_df = code_df[['회사명', '종목코드']]
+code_df = code_df.rename(columns={'회사명': 'name', '종목코드': 'code'}) 
+code_df.head()
+
+def crawler(df):
+    data = pd.DataFrame()
+    for item_name in code_df.name:
+        code = code_df.query("name=='{}'".format(item_name))['code'].to_string(index=False)
+        x = 'http://finance.naver.com/item/sise_day.nhn?code={code}'.format(code=code)
+        for page in range(1,21):
+            pg_url = '{url}&page={page}'.format(url=x, page=page)
+            data = data.append(pd.read_html(pg_url, header=0)[0], ignore_index=True)
+            data = data.dropna()
+            data = data.rename(columns = {'날짜': 'date', '종가': 'close', '전일비': 'diff', '시가': 'open', '고가': 'high', '저가': 'low', '거래량': 'volume'})
+            data.to_excel("stockprice_%s.xlsx" % item_name, sheet_name = 'Quotes')
+        data = pd.DataFrame()
+        print(item_name,"완료")
+
+crawler(code_df)
